@@ -16,7 +16,7 @@ mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-
+//defining schema
 const user_track = new mongoose.Schema({
   username: { type: String, required: true },
   log: [
@@ -27,7 +27,6 @@ const user_track = new mongoose.Schema({
     },
   ],
 });
-
 const userTrack = mongoose.model("user_track", user_track);
 
 //handeling index page
@@ -50,14 +49,14 @@ app
       err ? res.json(err) : res.json(data);
     });
   });
-
+//adding logs in the db
 app.post("/api/users/:_id/exercises", (req, res) => {
   let obj = {
     description: req.body.description,
     duration: parseInt(req.body.duration),
     date: req.body.date ? new Date(req.body.date) : new Date(),
   };
-
+  //checking for the Id
   const checkId = new Promise((resolve, reject) => {
     userTrack.findByIdAndUpdate(
       req.params._id,
@@ -82,6 +81,53 @@ app.post("/api/users/:_id/exercises", (req, res) => {
     .catch((err) => res.json(err));
 });
 
+app.get("/api/users/:_id/logs", (req, res) => {
+  //finding tha users tracks
+  const getData = new Promise((resolve, reject) => {
+    userTrack.findById(
+      req.params._id,
+      { __v: 0, log: { _id: 0 } },
+      (err, data) => {
+        (err || !data) ? reject("Sporty Fucking Spice") : resolve(data);
+      }
+    );
+  });
+
+  getData
+    .then((data) => { //processing various queries
+      if (req.query.from !== undefined && req.query.from !== "") { //from date constaint
+        const from = new Date(req.query.from);
+        data.log = data["log"].filter((x) => {
+          const date = new Date(x.date);
+          return date >= from;
+        });
+      } //to date constraints
+      if (req.query.to !== undefined && req.query.to !== "") {
+        const to = new Date(req.query.to);
+        data.log = data["log"].filter((x) => {
+          const date = new Date(x.date);
+          return date <= to;
+        });
+      } // applying limit
+      if (req.query.limit !== undefined && req.query.limit !== "") {
+        const limit = parseInt(req.query.limit);
+        data.log = data.log.slice(0, limit);
+      }
+      data.log = data.log.map((x) => {
+        x.date = new Date(x.date).toDateString(); //converting date
+        return x;
+      })
+      
+      res.json({
+        _id: data._id,
+        username: data.username,
+        count: data.log.length,
+        log: data.log
+      });
+    })
+    .catch((err) => res.json(err));
+});
+//establishing connection
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log("Your app is listening on port " + listener.address().port);
 });
